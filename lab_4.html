@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Лабораторна робота: Сховище та міжвкладкова синхронізація</title>
+  <style>
+    body { font-family: sans-serif; margin: 24px; line-height: 1.5; }
+    section { margin-bottom: 32px; border: 1px solid #ccc; padding: 16px; border-radius: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f4f4f4; }
+    form { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+    input, select, button { padding: 6px 10px; font-size: 14px; }
+    button { cursor: pointer; }
+    .btn-del { background-color: #ff4d4f; color: white; border: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <h1>Управління дисциплінами та викладачами</h1>
+
+  <section>
+    <h2>1. Дисципліни</h2>
+    <form id="subject-form">
+      <input type="text" id="subject-name" placeholder="Назва дисципліни" required>
+      <button type="submit">Додати дисципліну</button>
+    </form>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Назва</th>
+          <th style="width: 80px;">Дії</th>
+        </tr>
+      </thead>
+      <tbody id="subjects-table-body"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>2. Викладачі</h2>
+    <form id="teacher-form">
+      <input type="text" id="teacher-name" placeholder="ПІБ викладача" required>
+      <select id="teacher-subject" required>
+        <option value="" disabled selected>Оберіть дисципліну...</option>
+      </select>
+      <button type="submit">Додати викладача</button>
+    </form>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Викладач</th>
+          <th>Закріплена дисципліна</th>
+          <th style="width: 80px;">Дії</th>
+        </tr>
+      </thead>
+      <tbody id="teachers-table-body"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const STORAGE_KEY_SUBJECTS = 'app_subjects_data';
+    const STORAGE_KEY_TEACHERS = 'app_teachers_data';
+
+    // Стан додатку (in-memory)
+    let subjects = [];
+    let teachers = [];
+
+    const subjectForm = document.getElementById('subject-form');
+    const subjectNameInput = document.getElementById('subject-name');
+    const subjectsTableBody = document.getElementById('subjects-table-body');
+
+    const teacherForm = document.getElementById('teacher-form');
+    const teacherNameInput = document.getElementById('teacher-name');
+    const teacherSubjectSelect = document.getElementById('teacher-subject');
+    const teachersTableBody = document.getElementById('teachers-table-body');
+
+    function loadData() {
+      try {
+        const rawSubjects = localStorage.getItem(STORAGE_KEY_SUBJECTS);
+        const rawTeachers = localStorage.getItem(STORAGE_KEY_TEACHERS);
+
+        subjects = rawSubjects ? JSON.parse(rawSubjects) : [];
+        teachers = rawTeachers ? JSON.parse(rawTeachers) : [];
+      } catch (e) {
+        console.error('Помилка читання localStorage:', e);
+        subjects = [];
+        teachers = [];
+      }
+      renderAll();
+    }
+
+    function saveSubjects() {
+      localStorage.setItem(STORAGE_KEY_SUBJECTS, JSON.stringify(subjects));
+    }
+
+    function saveTeachers() {
+      localStorage.setItem(STORAGE_KEY_TEACHERS, JSON.stringify(teachers));
+    }
+
+    function renderSubjectsTable() {
+      subjectsTableBody.innerHTML = '';
+      subjects.forEach(subject => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${subject.id}</td>
+          <td>${escapeHtml(subject.name)}</td>
+          <td><button class="btn-del" onclick="deleteSubject(${subject.id})">Видалити</button></td>
+        `;
+        subjectsTableBody.appendChild(tr);
+      });
+    }
+
+    function renderSubjectSelect() {
+      teacherSubjectSelect.innerHTML = '<option value="" disabled selected>Оберіть дисципліну...</option>';
+      subjects.forEach(subject => {
+        const option = document.createElement('option');
+        option.value = subject.name;
+        option.textContent = subject.name;
+        teacherSubjectSelect.appendChild(option);
+      });
+    }
+
+    function renderTeachersTable() {
+      teachersTableBody.innerHTML = '';
+      teachers.forEach(teacher => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${teacher.id}</td>
+          <td>${escapeHtml(teacher.name)}</td>
+          <td>${escapeHtml(teacher.subject)}</td>
+          <td><button class="btn-del" onclick="deleteTeacher(${teacher.id})">Видалити</button></td>
+        `;
+        teachersTableBody.appendChild(tr);
+      });
+    }
+
+    function renderAll() {
+      renderSubjectsTable();
+      renderSubjectSelect();
+      renderTeachersTable();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    subjectForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = subjectNameInput.value.trim();
+      if (!name) return;
+
+      const newSubject = {
+        id: Date.now(),
+        name: name
+      };
+
+      subjects.push(newSubject);
+      saveSubjects();
+      renderAll();
+
+      subjectNameInput.value = '';
+    });
+
+    teacherForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = teacherNameInput.value.trim();
+      const subject = teacherSubjectSelect.value;
+
+      if (!name || !subject) return;
+
+      const newTeacher = {
+        id: Date.now(),
+        name: name,
+        subject: subject
+      };
+
+      teachers.push(newTeacher);
+      saveTeachers();
+      renderTeachersTable();
+
+      teacherNameInput.value = '';
+      teacherSubjectSelect.selectedIndex = 0;
+    });
+
+    window.deleteSubject = function(id) {
+      subjects = subjects.filter(s => s.id !== id);
+      saveSubjects();
+      renderAll();
+    };
+
+    window.deleteTeacher = function(id) {
+      teachers = teachers.filter(t => t.id !== id);
+      saveTeachers();
+      renderTeachersTable();
+    };
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === STORAGE_KEY_SUBJECTS || event.key === STORAGE_KEY_TEACHERS) {
+        loadData();
+      }
+    });
+
+    loadData();
+  </script>
+</body>
+</html>
